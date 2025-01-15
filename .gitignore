@@ -24,3 +24,5 @@ ex_verity-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+config/runtime.exs
+test.txt

@@ -21,6 +21,7 @@ defmodule ExVerity.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:briefly, "~> 0.5"},
       {:igniter, "~> 0.5", optional: true}
     ]
   end

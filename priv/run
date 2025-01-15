@@ -1,3 +1,6 @@
 #!/bin/sh
 
-mix run -e "ExVerity.run()"
+set -e
+
+FS_PATH=$1
+mix run -e "ExVerity.run(\"${FS_PATH}\")"

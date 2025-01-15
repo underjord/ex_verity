@@ -1,0 +1,4 @@
+#!/bin/sh
+
+FS_PATH=$1
+mix run -e "ExVerity.sign(\"${FS_PATH}\")"
