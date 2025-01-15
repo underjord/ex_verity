@@ -8,9 +8,11 @@ defmodule Mix.Tasks.ExVerity.Install do
       "target.exs",
       :nerves,
       [:firmware, :post_processing_script],
-      quote do
-        "deps/ex_verity/priv/sign.sh"
-      end
+      {:code,
+        Sourceror.parse_string!("""
+        Path.expand(".deps/ex_verity/priv/sign.sh")
+        """)
+      }
     )
   end
 end
