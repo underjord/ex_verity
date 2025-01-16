@@ -21,10 +21,13 @@ defmodule ExVerity do
     else
       Logger.info("dm-verity not configured")
     end
+    if get_in(config, [:rpi4_secure_boot, :private_key_path]) do
+      {:ok, _image_path} =
+        config
+        |> Map.new()
+        |> ExVerity.Rpi4SecureBoot.generate_image()
+#      ExVerity.Pi4SecureBoot.sign_image(image_path)
+    end
   end
 
-    # if get_in(config, [:pi4_secure_boot, :private_key_path]) do
-    #   {:ok, image_path} = ExVerity.Pi4SecureBoot.generate_image()
-    #   ExVerity.Pi4SecureBoot.sign_image(image_path)
-    # end
 end
