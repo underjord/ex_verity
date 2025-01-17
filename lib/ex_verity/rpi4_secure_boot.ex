@@ -17,7 +17,7 @@ defmodule ExVerity.Rpi4SecureBoot do
       )
     end
 
-    config_file = Map.get(config, :config_file, Path.join(rpi4_dir, "boot_img/boot_img.cfg"))
+    config_file = Map.get(config, :config_file, Path.join(rpi4_dir, "boot_img/boot_fwup.conf"))
     config_txt = Path.join(rpi4_dir, "boot_img/config.txt")
     cmdline_txt = Path.join(rpi4_dir, "boot_img/cmdline.txt")
 
