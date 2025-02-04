@@ -11,6 +11,8 @@ defmodule ExVerity.Rpi4SecureBoot do
       config[:rootfs_public_key_path] ||
         Application.get_env(:ex_verity, :rootfs, [])[:public_key_path]
 
+    rootfs_cpio_zst = config[:initramfs_path]
+
     if is_nil(rootfs_pubkey) do
       Logger.warning(
         "No root filesystem public key specified for ex_verity. This RPi 4 will not be able to verify the root filesystem. See examples for configuration in the documentation."
@@ -23,10 +25,27 @@ defmodule ExVerity.Rpi4SecureBoot do
 
     system_path = config[:system_path] || System.fetch_env!("NERVES_SYSTEM")
     binary = Map.get(config, :binary_path, "fwup")
-    fwup(binary, system_path, config_file, config_txt, cmdline_txt, rootfs_pubkey)
+
+    fwup(
+      binary,
+      system_path,
+      config_file,
+      config_txt,
+      cmdline_txt,
+      rootfs_pubkey,
+      rootfs_cpio_zst
+    )
   end
 
-  defp fwup(binary, system_path, config_file, config_txt, cmdline_txt, rootfs_pubkey) do
+  defp fwup(
+         binary,
+         system_path,
+         config_file,
+         config_txt,
+         cmdline_txt,
+         rootfs_pubkey,
+         rootfs_cpio_zst
+       ) do
     images_dir = Path.join(system_path, "images")
     tmp_dir = Path.dirname(Briefly.create!())
     fw_file = Path.join(tmp_dir, "boot.fw")
@@ -41,7 +60,8 @@ defmodule ExVerity.Rpi4SecureBoot do
               images_dir,
               config_txt,
               cmdline_txt,
-              rootfs_pubkey
+              rootfs_pubkey,
+              rootfs_cpio_zst
             )},
          {:apply, {_, 0}} <- {:apply, fwup_apply(binary, boot_file, fw_file)} do
       {:ok, boot_file}
@@ -61,7 +81,8 @@ defmodule ExVerity.Rpi4SecureBoot do
          images_dir,
          config_txt,
          cmdline_txt,
-         rootfs_pub_key
+         rootfs_pub_key,
+         rootfs_cpio_zst
        ) do
     System.cmd(
       binary,
@@ -76,7 +97,8 @@ defmodule ExVerity.Rpi4SecureBoot do
         "SOURCE" => images_dir,
         "CONFIG_TXT" => config_txt,
         "CMDLINE_TXT" => cmdline_txt,
-        "ROOTFS_PUB_KEY" => rootfs_pub_key
+        "ROOTFS_PUB_KEY" => rootfs_pub_key,
+        "ROOTFS_CPIO_ZST" => rootfs_cpio_zst
       }
     )
   end

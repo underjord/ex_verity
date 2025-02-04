@@ -3,4 +3,17 @@
 set -e
 
 FS_PATH=$1
+echo "Running ex_verity script for firmware being built."
+echo "Firmware build path: ${FS_PATH}"
+# Assuming bash for now
+# env -i resets env
+# HOME part restores home, importantly
+# bash -l gives a bash login shell which restores asdf
+# LC_ALL is for locale to remove a warning
+#env -i HOME=${HOME} LC_ALL=en_US.UTF-8 bash -l mix run -e "ExVerity.run(\"${FS_PATH}\")"
+T=${MIX_TARGET}
+export MIX_TARGET=host
+echo $(env)
 mix run -e "ExVerity.run(\"${FS_PATH}\")"
+export MIX_TARGET=$T
+echo "ex_verity script done"

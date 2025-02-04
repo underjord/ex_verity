@@ -1,0 +1,29 @@
+#!/usr/bin/env elixir
+
+ex_verity_path =
+    :escript.script_name()
+    |> to_string()
+    |> Path.dirname()
+    |> Path.join("..")
+    |> Path.expand()
+
+config_path =
+    "NERVES_APP"
+    |> System.fetch_env!()
+    |> Path.join("config/config.exs")
+
+Application.ensure_all_started(:mix)
+config = Config.Reader.read!(config_path)
+Mix.install(
+    [
+    {:ex_verity, path: ex_verity_path},
+    :igniter
+    ],
+    config: config
+)
+
+[fs_path] = System.argv()
+IO.puts("Running ex_verity script for firmware being built.")
+IO.puts("Firmware build path: #{fs_path}")
+ExVerity.run(fs_path)
+IO.puts("ex_verity script done")
