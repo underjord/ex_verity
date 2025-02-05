@@ -35,7 +35,13 @@ defmodule ExVerity do
 
       Logger.info("Created boot.img at: #{image_path}")
 
-      #      ExVerity.Pi4SecureBoot.sign_image(image_path)
+      {:ok, signature_path} =
+        ExVerity.Rpi4SecureBoot.sign_image(
+          image_path,
+          config[:rpi4_secure_boot][:private_key_path]
+        )
+
+      Logger.info("Created boot.sig at: #{signature_path}")
     end
   end
 end

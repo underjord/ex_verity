@@ -118,7 +118,43 @@ defmodule ExVerity.Rpi4SecureBoot do
     )
   end
 
-  def sign_image(image_path) do
-    IO.puts("img: #{image_path}")
+  def sign_image(image_path, private_key_path) do
+    dir = Path.dirname(image_path)
+    signature_path = Path.join(dir, "boot.sig")
+    sig_temp_file = Briefly.create!()
+
+    with {_, 0} <-
+           System.cmd("openssl", [
+             "dgst",
+             "-sha256",
+             "-sign",
+             private_key_path,
+             "-out",
+             sig_temp_file,
+             image_path
+           ]),
+         {shasum, 0} <- System.cmd("sha256sum", [image_path]),
+         {hexsignature, 0} <- System.shell("xxd -c 4096 -p < #{sig_temp_file}") do
+      ts =
+        DateTime.utc_now()
+        |> DateTime.to_unix()
+
+      signature = """
+      #{shasum}
+      ts: #{ts}
+      rsa2048: #{hexsignature}
+      """
+
+      case File.write(signature_path, signature) do
+        :ok ->
+          {:ok, signature_path}
+
+        error ->
+          error
+      end
+    else
+      _ ->
+        {:error, :signature_failed}
+    end
   end
 end
