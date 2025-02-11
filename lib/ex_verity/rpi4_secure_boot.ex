@@ -11,7 +11,7 @@ defmodule ExVerity.Rpi4SecureBoot do
       config[:rootfs_public_key_path] ||
         Application.get_env(:ex_verity, :rootfs, [])[:public_key_path]
 
-    rootfs_cpio_zst = config[:initramfs_path]
+    rootfs_path = config[:initramfs_path]
 
     if is_nil(rootfs_pubkey) do
       Logger.warning(
@@ -33,7 +33,7 @@ defmodule ExVerity.Rpi4SecureBoot do
       config_txt,
       cmdline_txt,
       rootfs_pubkey,
-      rootfs_cpio_zst
+      rootfs_path
     )
   end
 
@@ -44,7 +44,7 @@ defmodule ExVerity.Rpi4SecureBoot do
          config_txt,
          cmdline_txt,
          rootfs_pubkey,
-         rootfs_cpio_zst
+         rootfs_path
        ) do
     images_dir = Path.join(system_path, "images")
     tmp_dir = Path.dirname(Briefly.create!())
@@ -61,7 +61,7 @@ defmodule ExVerity.Rpi4SecureBoot do
               config_txt,
               cmdline_txt,
               rootfs_pubkey,
-              rootfs_cpio_zst
+              rootfs_path
             )},
          {:apply, {_, 0}} <- {:apply, fwup_apply(binary, boot_file, fw_file)} do
       {:ok, boot_file}
@@ -82,7 +82,7 @@ defmodule ExVerity.Rpi4SecureBoot do
          config_txt,
          cmdline_txt,
          rootfs_pub_key,
-         rootfs_cpio_zst
+         rootfs_path
        ) do
     System.cmd(
       binary,
@@ -98,7 +98,7 @@ defmodule ExVerity.Rpi4SecureBoot do
         "CONFIG_TXT" => config_txt,
         "CMDLINE_TXT" => cmdline_txt,
         "ROOTFS_PUB_KEY" => rootfs_pub_key,
-        "ROOTFS_CPIO_ZST" => rootfs_cpio_zst
+        "ROOTFS" => rootfs_path
       }
     )
   end
@@ -156,5 +156,13 @@ defmodule ExVerity.Rpi4SecureBoot do
       _ ->
         {:error, :signature_failed}
     end
+  end
+
+  def copy_outer_txts!(image_path) do
+    dir = Path.dirname(image_path)
+    rpi4_dir = Path.join(:code.priv_dir(:ex_verity), "rpi4")
+    File.cp!(Path.join(rpi4_dir, "boot_img/config.txt"), Path.join(dir, "outer_config.txt"))
+    File.cp!(Path.join(rpi4_dir, "boot_img/cmdline.txt"), Path.join(dir, "outer_cmdline.txt"))
+    :ok
   end
 end

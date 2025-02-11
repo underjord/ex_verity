@@ -42,6 +42,10 @@ defmodule ExVerity do
         )
 
       Logger.info("Created boot.sig at: #{signature_path}")
+
+      ExVerity.Rpi4SecureBoot.copy_outer_txts!(image_path)
+
+      Logger.info("Copied outer config.txt and cmdline.txt")
     end
   end
 end
