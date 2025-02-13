@@ -1,0 +1,42 @@
+#!/bin/sh
+# Init script for the initramfs, first step where we control
+# things in the RPi boot sequence.
+echo "======================= Running init from rootfs_overlay"
+
+mount -t devtmpfs -o rw none /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+#echo "Waiting for /dev/mmcblk0p2..."
+#until  [ -b "/dev/mmcblk0p2" ]; do
+#  sleep 5
+#done
+
+    #rpi-otp-private-key -b > key.bin
+    #KEY_PATH="test-key.bin"
+    #if cryptsetup open --type=luks2 --key-file "$KEY_PATH" /dev/mmcblk0p2 appfs; then
+ #exec /bin/sh
+#mkdir /media/root
+#echo "Mounting /dev/mmcblk0p2..."
+#mount /dev/mmcblk0p2 /media/root
+#echo "Mounted /media/root"
+exec /bin/sh
+#exec switch_root /media/root/ /sbin/init_sh
+
+    #mount /dev/mapper/appfs /media/mmcblk0p2
+    # else
+    #     mkdir /media/mmcblk0p2
+    #     mount /dev/mmcblk0p2 /media/mmcblk0p2
+    #     mkdir /root/mmcblk0p2
+    #     cp -r /media/mmcblk0p2/* /root/mmcblk0p2/
+    #     umount /media/mmcblk0p2
+    #     cryptsetup -q luksFormat --type=luks2 --key-file="$KEY_PATH" --pbkdf argon2id /dev/mmcblk0p2
+    #     cryptsetup open --type=luks2 --key-file "$KEY_PATH" /dev/mmcblk0p2 appfs
+    #     /usr/sbin/mke2fs -t ext4 /dev/mapper/appfs
+    #     mount /dev/mapper/appfs /media/mmcblk0p2
+    #     cp -r /root/mmcblk0p2/* /media/mmcblk0p2/
+    # fi
+
+    #echo "Not switching root."
+    #echo "Switching root :)"
+    #exec switch_root /media/root/ /sbin/init
