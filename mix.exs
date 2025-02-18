@@ -8,7 +8,25 @@ defmodule ExVerity.MixProject do
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: [
+        files: [
+          "initramfs",
+          "lib",
+          "priv",
+          ".formatter.exs",
+          "mix.exs",
+          "README*",
+          "readme*",
+          "LICENSE*",
+          "license*",
+          "CHANGELOG*",
+          "changelog*",
+          "src",
+          "c_src",
+          "Makefile*"
+        ]
+      ]
     ]
   end
 
@@ -30,6 +48,4 @@ defmodule ExVerity.MixProject do
       {:igniter, "~> 0.5", optional: true}
     ]
   end
-
-
 end

@@ -13,6 +13,25 @@ defmodule ExVerity.Rpi4SecureBoot do
 
     rootfs_path = config[:initramfs_path]
 
+    case File.stat(rootfs_path) do
+      {:error, :enoent} ->
+        Logger.info("No initramfs built at: #{rootfs_path}")
+        Logger.info("Building initramfs from")
+        default_initramfs_project = Path.join(:code.priv_dir(:ex_verity), "initramfs")
+
+        {_output, 0} =
+          System.shell("./build-one.sh rpi4",
+            cd: default_initramfs_project,
+            stderr_to_stdout: true
+          )
+
+        {:ok, %{type: :regular}} = File.stat(rootfs_path)
+        Logger.info("Initramfs built.")
+
+      {:ok, %{type: :regular}} ->
+        Logger.info("Using existing initramfs at: #{rootfs_path}")
+    end
+
     if is_nil(rootfs_pubkey) do
       Logger.warning(
         "No root filesystem public key specified for ex_verity. This RPi 4 will not be able to verify the root filesystem. See examples for configuration in the documentation."

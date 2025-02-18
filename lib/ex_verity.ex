@@ -11,9 +11,6 @@ defmodule ExVerity do
     Logger.info("Running ExVerity.run...")
     config = Application.get_all_env(:ex_verity)
 
-    IO.inspect(File.cwd!(), label: "current working directory")
-    IO.inspect(config)
-
     if get_in(config, [:rootfs, :private_key_path]) &&
          get_in(config, [:rootfs, :public_key_path]) do
       {root_hash, hash_offset} =

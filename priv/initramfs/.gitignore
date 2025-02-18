@@ -1,3 +1,6 @@
+*-initramfs.gz
+*-initramfs.xz
+*-initramfs.zst
 /buildroot*
 /o
 /dl
