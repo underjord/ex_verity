@@ -19,7 +19,7 @@ defmodule ExVerity.Rpi4SecureBoot do
         Logger.info("Building initramfs from")
         default_initramfs_project = Path.join(:code.priv_dir(:ex_verity), "initramfs")
 
-        case System.cmd("./build-one.sh", ["rpi4"],
+        case System.cmd(Path.join(default_initramfs_project, "build-one.sh"), ["rpi4"],
                cd: default_initramfs_project,
                into: IO.stream()
              ) do

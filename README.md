@@ -74,8 +74,7 @@ config :ex_verity,
   rpi4_secure_boot: [
     public_key_path: System.fetch_env!("EX_VERITY_RPI4_BOOT_PUBLIC_KEY_PATH"),
     private_key_path: System.fetch_env!("EX_VERITY_RPI4_BOOT_PRIVATE_KEY_PATH"),
-    # Not necessary to set but available if customizing your initramfs
-    # initramfs_path: "./deps/ex_verity/priv/initramfs/rpi4-initramfs.gz"
+    initramfs_path: "./deps/ex_verity/priv/initramfs/rpi4-initramfs.gz"
   ]
 
 config :nerves, :firmware,
