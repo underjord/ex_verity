@@ -15,7 +15,7 @@ Start by adding it to your deps in `mix.exs`:
 ```elixir
 def deps do
   #..
-  {:ex_verity, "~> 0.1.0", runtime: false},
+  {:ex_verity, github: "underjord/ex_verity", runtime: false},
   # NOTICE: a required version of `nerves` is not released yet, you can use
   {:nerves, github: "nerves-project/nerves", override: true, runtime: false}
 end
