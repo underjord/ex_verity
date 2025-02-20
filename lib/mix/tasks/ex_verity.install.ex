@@ -54,6 +54,7 @@ if Code.loaded?(Igniter) do
         "target.exs",
         :nerves,
         [:firmware, :post_processing_script],
+        # TODO: Don't do this anymore, it can't resolve the ex_verity location
         {:code,
          Sourceror.parse_string!("""
          Path.expand("priv/ex_verity/process_firmware")

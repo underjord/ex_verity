@@ -15,25 +15,37 @@ Start by adding it to your deps in `mix.exs`:
 ```elixir
 def deps do
   #..
-    {:ex_verity, "~> 0.1.0", runtime: false}
+  {:ex_verity, "~> 0.1.0", runtime: false},
+  # NOTICE: a required version of `nerves` is not released yet, you can use
+  {:nerves, github: "nerves-project/nerves", override: true, runtime: false}
 end
 ```
 
 Then you need to make several modifications to your project:
 
-- Add custom `fwup.conf` and `fwup_include` to handle a larger boot
+1. Add custom `fwup.conf` and `fwup_include` to handle a larger boot
   partition. Provided under `deps/ex_verity/priv/rpi4` and ideally
   kept under `config/rpi4/`.
-- Override `/etc/erlinit.config` if you want to mount an encrypted data partition. Available in `deps/ex_verity/priv/rpi4/rootfs_overlay/etc/erlinit.config`. Ideally use a rootfs_overlay folder specific to the device: `overlays/rpi4/rootfs_overlay/`.
-- Add `/sbin/init_sh` for initramfs switch over to, available in `deps/ex_verity/priv/rpi4/rootfs_overlay/sbin/init_sh`.
-- Copy from `deps/ex_verity/priv/process_firmware` to `priv/ex_verity/process_firmware`
-  so you have a known location for a script to hook into the firmware build.
+
+```
+mkdir -p config/rpi4
+cp -r deps/ex_verity/priv/rpi4/fwup* config/rpi4/
+```
+
+2. Override `/etc/erlinit.config` and `/sbin/init_sh` if you want to mount an encrypted data partition. Available in `deps/ex_verity/priv/rpi4/rootfs_overlay/`. Ideally use a rootfs_overlay folder specific to the device: `overlays/rpi4/rootfs_overlay/`.
+
+```
+mkdir -p overlays/rpi4/
+# Keep the iex config and any other modifications
+cp -r rootfs_overlay overlays/rpi4/rootfs_overlay
+rsync -r --verbose deps/ex_verity/priv/rpi4/rootfs_overlay overlays/rpi4/rootfs_overlay
+```
 
 Configuration changes in `target.exs`:
 
 ```
 config :nerves, :firmware,
-  post_processing_script: Path.expand("priv/ex_verity/process_firmware")
+  post_processing_script: Path.expand("./deps/ex_verity/process_firmware")
 
 # We are not keeping key paths in the config. 
 # Environment variables are easier to automate and adapt to each
@@ -68,6 +80,17 @@ config :ex_verity,
 
 config :nerves, :firmware,
   rootfs_overlay: "overlays/rpi4/rootfs_overlay"
+```
+
+You can use a tool like `direnv` with a `.envrc` file to manage
+environment variables without adding them into your git repo.
+
+You can now try building:
+
+```
+export MIX_TARGET=rpi4
+mix deps.get
+mix firmware
 ```
 
 ## Supported boards

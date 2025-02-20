@@ -1,5 +1,9 @@
 #!/usr/bin/env elixir
 
+app_dir =
+    "NERVES_APP"
+    |> System.fetch_env!()
+
 ex_verity_path =
     :escript.script_name()
     |> to_string()
@@ -8,19 +12,14 @@ ex_verity_path =
     |> Path.expand()
 
 config_path =
-    "NERVES_APP"
-    |> System.fetch_env!()
+    app_dir
     |> Path.join("config/config.exs")
 
 Application.ensure_all_started(:mix)
 env = System.get_env("MIX_ENV", "dev") |> String.to_atom()
 config = Config.Reader.read!(config_path, env: env)
 Mix.install(
-    [
-    {:ex_verity, path: ex_verity_path},
-    :igniter,
-    :briefly
-    ],
+    [{:ex_verity, path: ex_verity_path}],
     config: config
 )
 
