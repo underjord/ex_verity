@@ -4,13 +4,8 @@ defmodule ExVerity.DmVerity do
     block_size = Map.get(config, :block_size, 4096)
     root_hash_path = Map.get(config, :root_hash_path, Briefly.create!())
 
-    # if config[:hash_path] do
-    #   verity_setup_separate_file(fs_path, root_hash_path, block_size, config[:hash_path])
-    # else
     {:ok, data_size} =
       verity_setup_same_file(fs_path, root_hash_path, block_size)
-
-    # end
 
     root_hash = File.read!(root_hash_path)
     system_path = config[:system_path] || System.fetch_env!("NERVES_SYSTEM")
@@ -45,25 +40,6 @@ defmodule ExVerity.DmVerity do
         %{size: new_size} = File.stat!(fs_path)
         IO.puts("#{new_size} bytes after")
         {:ok, data_size}
-
-      {output, status} ->
-        IO.puts("veritysetup exited with status: #{status}")
-        IO.puts("output:")
-        IO.puts(output)
-        System.halt(1)
-    end
-  end
-
-  defp verity_setup_separate_file(fs_path, root_hash_path, block_size, hash_file) do
-    case System.cmd("veritysetup", [
-           "format",
-           fs_path,
-           hash_file,
-           "--data-block-size=#{block_size}",
-           "--root-hash-file=#{root_hash_path}"
-         ]) do
-      {_, 0} ->
-        {:ok, 0}
 
       {output, status} ->
         IO.puts("veritysetup exited with status: #{status}")
