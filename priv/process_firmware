@@ -13,11 +13,13 @@ config_path =
     |> Path.join("config/config.exs")
 
 Application.ensure_all_started(:mix)
-config = Config.Reader.read!(config_path)
+env = System.get_env("MIX_ENV", "dev") |> String.to_atom()
+config = Config.Reader.read!(config_path, env: env)
 Mix.install(
     [
     {:ex_verity, path: ex_verity_path},
-    :igniter
+    :igniter,
+    :briefly
     ],
     config: config
 )

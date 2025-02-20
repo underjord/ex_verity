@@ -19,11 +19,19 @@ defmodule ExVerity.Rpi4SecureBoot do
         Logger.info("Building initramfs from")
         default_initramfs_project = Path.join(:code.priv_dir(:ex_verity), "initramfs")
 
-        {_output, 0} =
-          System.shell("./build-one.sh rpi4",
-            cd: default_initramfs_project,
-            stderr_to_stdout: true
-          )
+        case System.cmd("./build-one.sh", ["rpi4"],
+               cd: default_initramfs_project,
+               into: IO.stream()
+             ) do
+          {_output, 0} ->
+            :ok
+
+          {output, status} ->
+            IO.puts("Building initramfs exited with status: #{status}")
+            IO.puts("output:")
+            IO.puts(output)
+            System.halt(1)
+        end
 
         {:ok, %{type: :regular}} = File.stat(rootfs_path)
         Logger.info("Initramfs built.")

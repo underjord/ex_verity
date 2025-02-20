@@ -4,21 +4,41 @@ defmodule Mix.Tasks.ExVerity.Install do
   @impl Igniter.Mix.Task
   def igniter(igniter) do
     igniter
+    |> Igniter.assign(chmods: %{})
     |> Igniter.Project.Deps.set_dep_option(:ex_verity, :runtime, false)
-    # Fix if you are running a custom nerves package via igniter
-    |> Igniter.Project.Deps.set_dep_option(:nerves, :runtime, false)
     |> add_firmware_post_processing_script()
     |> add_rootfs_signing_key()
     |> add_rpi4_secure_boot()
+    |> add_chmods()
+  end
+
+  defp add_chmods(igniter) do
+    args =
+      Enum.flat_map(igniter.assigns.chmods, fn {filepath, mode} ->
+        [filepath, to_string(mode)]
+      end)
+
+    igniter
+    |> Igniter.add_task("ex_verity.ensure_perms", args)
+  end
+
+  defp chmod(igniter, filepath, mode) do
+    igniter
+    |> Igniter.assign(chmods: Map.put(igniter.assigns.chmods, filepath, mode))
   end
 
   defp add_firmware_post_processing_script(igniter) do
-    run_script = Path.join(:code.priv_dir(:ex_verity), "run_elixir")
-    IO.inspect(:code.priv_dir(Igniter.Project.Application.app_name(igniter)))
-    target =
-      igniter
-      |> Igniter.Project.Application.priv_dir()
-      |> Path.join("ex_verity/process_firmware")
+    run_script = Path.join(:code.priv_dir(:ex_verity), "process_firmware")
+    # Due to a bug I can't get the current application dir but
+    # at the moment that this runs it should be safe to assume the
+    # current working directory and use relative ./priv
+    # This issue: https://github.com/ash-project/igniter/issues/230
+    target = "./priv/ex_verity/process_firmware"
+
+    # target =
+    #  igniter
+    #  |> Igniter.Project.Application.priv_dir()
+    #  |> Path.join("ex_verity/process_firmware")
 
     File.mkdir_p!(Path.dirname(target))
 
@@ -28,6 +48,7 @@ defmodule Mix.Tasks.ExVerity.Install do
       File.read!(run_script),
       on_exists: :warning
     )
+    |> chmod(target, 0o700)
     |> Igniter.Project.Config.configure(
       "target.exs",
       :nerves,
@@ -94,6 +115,7 @@ defmodule Mix.Tasks.ExVerity.Install do
         initramfs_path
       )
       |> rpi4_custom_fwup_conf()
+      |> rpi4_rootfs_overlay()
     else
       igniter
     end
@@ -121,6 +143,36 @@ defmodule Mix.Tasks.ExVerity.Install do
       [:firmware, :fwup_conf],
       "config/rpi4/fwup.conf"
     )
+  end
+
+  defp rpi4_rootfs_overlay(igniter) do
+    source = Path.join(:code.priv_dir(:ex_verity), "rpi4")
+
+    source
+    |> Path.join("rootfs_overlay/**/*")
+    |> Path.wildcard()
+    |> Enum.reduce(igniter, fn source_path, igniter ->
+      filepath = Path.relative_to(source_path, source)
+      IO.inspect(filepath, label: "filepath")
+      IO.inspect(source_path, label: "source path")
+
+      case File.stat!(source_path) |> dbg() do
+        %{type: :regular, mode: mode} ->
+          filepath
+          |> Path.dirname()
+          |> File.mkdir_p()
+
+          # adapt mode to what chown expects
+          mode = mode - 0o100000
+
+          igniter
+          |> Igniter.create_new_file(filepath, File.read!(source_path), on_exists: :warning)
+          |> chmod(filepath, mode)
+
+        _ ->
+          igniter
+      end
+    end)
   end
 
   defp enable_per_target_config(igniter) do
