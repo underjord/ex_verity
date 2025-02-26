@@ -108,8 +108,8 @@ defmodule ExVerity.Rpi4SecureBoot do
         "SOURCE" => images_dir,
         "CONFIG_TXT" => config_txt,
         "CMDLINE_TXT" => cmdline_txt,
-        "ROOTFS_PUB_KEY" => rootfs_pub_key,
-        "ROOTFS" => rootfs_path
+        "ROOTFS_PUB_KEY" => Path.expand(rootfs_pub_key),
+        "ROOTFS" => Path.expand(rootfs_path)
       }
     )
   end

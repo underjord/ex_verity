@@ -84,6 +84,11 @@ config :nerves, :firmware,
 You can use a tool like `direnv` with a `.envrc` file to manage
 environment variables without adding them into your git repo.
 
+Build the initramfs (once, or once every time you update ex_verity):
+```
+mix ex_verity.initramfs rpi4
+```
+
 You can now try building:
 
 ```
