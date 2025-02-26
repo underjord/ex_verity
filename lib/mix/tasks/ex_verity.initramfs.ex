@@ -10,6 +10,14 @@ defmodule Mix.Tasks.ExVerity.Initramfs do
 
   @impl Mix.Task
   def run([platform]) when platform in @platforms do
+    if Mix.target() != :host do
+      Mix.shell().info(
+        "This needs to run under MIX_TARGET=host, your mix target: #{Mix.target()}"
+      )
+
+      System.halt(3)
+    end
+
     Application.ensure_loaded(:ex_verity)
     default_initramfs_project = Path.join(:code.priv_dir(:ex_verity), "initramfs")
 
