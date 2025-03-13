@@ -1,0 +1,9 @@
+config BR2_PACKAGE_NERVES_KEY
+	bool "nerves_key"
+	help
+	  A utility for operating a NervesKey
+
+config BR2_PACKAGE_NERVES_KEY_DEBUG
+	bool "nerves_key debug"
+	help
+	  Enable debug output

@@ -1,2 +1,3 @@
 # Custom packages
 
+source "$BR2_EXTERNAL_CUSTOM_PATH/package/nerves_key/Config.in"
