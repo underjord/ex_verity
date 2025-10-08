@@ -45,7 +45,7 @@ Configuration changes in `target.exs`:
 
 ```
 config :nerves, :firmware,
-  post_processing_script: Path.expand("./deps/ex_verity/process_firmware")
+  post_processing_script: Path.expand("./deps/ex_verity/priv/process_firmware")
 
 # We are not keeping key paths in the config. 
 # Environment variables are easier to automate and adapt to each
