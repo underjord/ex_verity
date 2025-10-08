@@ -25,6 +25,7 @@ defmodule ExVerity do
     end
 
     if get_in(config, [:rpi4_secure_boot, :private_key_path]) do
+      Logger.info("Beginning RPi4 Secure Boot ...")
       {:ok, image_path} =
         config[:rpi4_secure_boot]
         |> Map.new()
@@ -44,5 +45,7 @@ defmodule ExVerity do
 
       Logger.info("Copied outer config.txt and cmdline.txt")
     end
+
+    Logger.info("Finished ExVerity.run")
   end
 end

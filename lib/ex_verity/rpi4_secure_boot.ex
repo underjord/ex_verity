@@ -13,11 +13,14 @@ defmodule ExVerity.Rpi4SecureBoot do
 
     rootfs_path = config[:initramfs_path]
 
+    Logger.info("Checking initramfs at: #{rootfs_path}")
     case File.stat(rootfs_path) do
       {:error, :enoent} ->
         Logger.info("No initramfs built at: #{rootfs_path}")
         Logger.info("Run `mix ex_verity.initramfs` to build the default one.")
         Logger.info("We would love to do it for you but trust me when I say we can't.")
+        # Logs were getting swallowed..
+        :timer.sleep(1000)
         System.halt(1)
 
       {:ok, %{type: :regular}} ->

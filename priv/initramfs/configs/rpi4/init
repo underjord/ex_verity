@@ -33,12 +33,5 @@ veritysetup open $FS_PATH $MAPPER_NAME $FS_PATH $ROOT_HASH --hash-offset=$HASH_O
 echo "Mounting mapper as /media/root..." > /dev/kmsg
 mkdir /media/root
 mount "/dev/mapper/$MAPPER_NAME" /media/root
-echo "Extracting secure key for data partition..." > /dev/kmsg
-echo "hardcodehardcodehardcodehardcode" > keyfile.txt
-echo "Setting up device mapper for encrypted data partition..." > /dev/kmsg
-cryptsetup open --type=plain --cipher=aes-cbc-plain --key-size=256 --key-file=keyfile.txt -q /dev/mmcblk0p3 data
-mkdir /d
-echo "Ensuring F2FS filesystem for data partition..." > /dev/kmsg
-mkfs.f2fs /dev/mapper/data
 echo "Switching from initramfs to rootfs on $FS_PATH, running /sbin/init_sh..." > /dev/kmsg
 exec switch_root /media/root /sbin/init_sh
