@@ -1,0 +1,9 @@
+config BR2_PACKAGE_RPI_OTP_KEY
+	bool "rpi_otp_key"
+	help
+	  A utility for reading Raspberry Pi OTP key material
+
+config BR2_PACKAGE_RPI_OTP_KEY_DEBUG
+	bool "rpi_otp_key debug"
+	help
+	  Enable debug output
