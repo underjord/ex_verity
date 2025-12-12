@@ -18,5 +18,5 @@ echo $FILES
 echo "-------------------"
 
 mkdir -p "$BINARIES_DIR"
-cp "${ABS_DEFCONFIG_DIR}/${TARGET_NAME}/init" "${TARGET_DIR}/init"
+cp "${BUILD_DIR}/verity_init/verity-init" "${TARGET_DIR}/init"
 cp "${ABS_DEFCONFIG_DIR}/${TARGET_NAME}/rpi-otp-private-key" "${TARGET_DIR}/bin/rpi-otp-private-key"

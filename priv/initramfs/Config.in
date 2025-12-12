@@ -2,3 +2,4 @@
 
 source "$BR2_EXTERNAL_CUSTOM_PATH/package/nerves_key/Config.in"
 source "$BR2_EXTERNAL_CUSTOM_PATH/package/rpi_otp_key/Config.in"
+source "$BR2_EXTERNAL_CUSTOM_PATH/package/verity_init/Config.in"

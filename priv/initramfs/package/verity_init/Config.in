@@ -1,0 +1,9 @@
+config BR2_PACKAGE_VERITY_INIT
+	bool "verity_init"
+	help
+	  Init program for dm-verity verified boot initramfs
+
+config BR2_PACKAGE_VERITY_INIT_DEBUG
+	bool "verity_init debug"
+	help
+	  Enable debug output
