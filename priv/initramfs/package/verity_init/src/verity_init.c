@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <dirent.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -58,12 +59,14 @@
 #define DATA_MAPPER_PATH "/dev/mapper/" DATA_MAPPER_NAME
 #define ROOT_MOUNT "/media/root"
 #define TMP_MOUNT "/tmp"
+#define ENCRYPT_TMP_MOUNT "/tmp/encrypt"
 #define NEXT_INIT "/sbin/init_sh"
 #define KEY_FILE "/tmp/keyfile.bin"
-#define FIRST_BOOT_CHECK_SIZE (256 * 512)  /* 256 LBA blocks */
+#define SQUASHFS_MAGIC 0x73717368  /* "hsqs" in little-endian */
 
 /* Forward declarations */
 static void kmsg(const char *fmt, ...);
+static int read_otp_key(unsigned char *key_out, size_t key_size);
 
 static int check_platform_driver_bound(const char *driver_path)
 {
@@ -318,84 +321,75 @@ static int read_file_trim(const char *path, char *buf, size_t buf_size)
     return 0;
 }
 
-static int is_first_boot(void)
+static int has_otp_key(void)
 {
-    int fd;
-    unsigned char buf[FIRST_BOOT_CHECK_SIZE];
-    ssize_t nread;
+    unsigned char key[32];
     size_t i;
     int all_zeros = 1;
 
-    kmsg("Checking for first boot condition...");
+    kmsg("Checking if OTP key exists...");
 
-    fd = open(DATA_DEVICE, O_RDONLY);
-    if (fd < 0) {
-        kmsg("Failed to open %s: %s", DATA_DEVICE, strerror(errno));
-        return -1;
+    if (read_otp_key(key, sizeof(key)) < 0) {
+        kmsg("Failed to read OTP key - assuming it doesn't exist");
+        return 0;
     }
 
-    nread = read(fd, buf, sizeof(buf));
-    close(fd);
-
-    if (nread < 0) {
-        kmsg("Failed to read from %s: %s", DATA_DEVICE, strerror(errno));
-        return -1;
-    }
-
-    if ((size_t)nread != sizeof(buf)) {
-        kmsg("Short read from %s: expected %zu, got %zd", DATA_DEVICE, sizeof(buf), nread);
-        return -1;
-    }
-
-    /* Check if all bytes are zero */
-    for (i = 0; i < (size_t)nread; i++) {
-        if (buf[i] != 0) {
+    /* Check if all bytes are zero (uninitialized OTP) */
+    for (i = 0; i < sizeof(key); i++) {
+        if (key[i] != 0) {
             all_zeros = 0;
             break;
         }
     }
 
+    memset(key, 0, sizeof(key));  /* Clear sensitive data */
+
     if (all_zeros) {
-        kmsg("First boot detected: first 256 LBA blocks are zeroed");
+        kmsg("OTP key is all zeros - needs initialization");
+        return 0;
+    }
+
+    debug("OTP key exists and is initialized");
+    return 1;
+}
+
+static int is_rootfs_plaintext_squashfs(void)
+{
+    int fd;
+    uint32_t magic;
+    ssize_t nread;
+
+    kmsg("Checking if rootfs is plaintext squashfs...");
+
+    fd = open(ROOT_DEVICE, O_RDONLY);
+    if (fd < 0) {
+        kmsg("Failed to open %s: %s", ROOT_DEVICE, strerror(errno));
+        return -1;
+    }
+
+    nread = read(fd, &magic, sizeof(magic));
+    close(fd);
+
+    if (nread < 0) {
+        kmsg("Failed to read from %s: %s", ROOT_DEVICE, strerror(errno));
+        return -1;
+    }
+
+    if ((size_t)nread != sizeof(magic)) {
+        kmsg("Short read from %s: expected %zu, got %zd", ROOT_DEVICE, sizeof(magic), nread);
+        return -1;
+    }
+
+    if (magic == SQUASHFS_MAGIC) {
+        kmsg("Rootfs is plaintext squashfs (magic: 0x%08x) - needs encryption", magic);
         return 1;
     }
 
-    debug("Not first boot: data device has been initialized");
+    debug("Rootfs does not start with squashfs magic (0x%08x) - assuming encrypted", magic);
     return 0;
 }
 
-static int mark_initialized(void)
-{
-    int fd;
-    unsigned char marker[1];
-    ssize_t nwritten;
 
-    kmsg("Marking data device as initialized...");
-
-    /* Write a simple marker to the first block */
-    memset(marker, 0xFF, 1);
-    snprintf((char *)marker, sizeof(marker), "INITIALIZED");
-
-    fd = open(DATA_DEVICE, O_WRONLY);
-    if (fd < 0) {
-        kmsg("Failed to open %s for writing: %s", DATA_DEVICE, strerror(errno));
-        return -1;
-    }
-
-    nwritten = write(fd, marker, sizeof(marker));
-    close(fd);
-
-    if (nwritten != sizeof(marker)) {
-        kmsg("Failed to write marker to %s", DATA_DEVICE);
-        return -1;
-    }
-
-    /* Sync to ensure it's written */
-    sync();
-
-    kmsg("Boot device marked as initialized");
-    return 0;
-}
 
 static int generate_otp_key(void)
 {
@@ -549,6 +543,15 @@ static int encrypt_rootfs_in_place(void)
 
     kmsg("Encrypting rootfs in place...");
 
+    /*
+     * NOTE: This encrypts the entire ROOT_DEVICE, including the dm-verity hash tree
+     * that is stored at an offset within the partition. After encryption, the stack is:
+     * 1. ROOT_DEVICE (encrypted squashfs + hash tree)
+     * 2. /dev/mapper/cryptroot (dm-crypt decrypts the encrypted data)
+     * 3. /dev/mapper/verity (dm-verity verifies the decrypted data)
+     * 4. Mount as squashfs
+     */
+
     /* Get the size of the root device */
     fd = open(ROOT_DEVICE, O_RDONLY);
     if (fd < 0) {
@@ -567,14 +570,20 @@ static int encrypt_rootfs_in_place(void)
 
     kmsg("Root device size: %lld bytes (%lld MB)", (long long)root_size, (long long)(root_size / (1024 * 1024)));
 
-    /* Remount tmpfs with enough space (already mounted, remount with size) */
-    snprintf(size_str, sizeof(size_str), "remount,size=%lld", (long long)root_size + (100 * 1024 * 1024));
-    if (mount("tmpfs", TMP_MOUNT, "tmpfs", MS_REMOUNT, size_str) < 0) {
-        kmsg("Warning: Failed to remount tmpfs with larger size: %s", strerror(errno));
+    /* Create mount point and mount a new separate tmpfs with enough space */
+    if (mkdir_p(ENCRYPT_TMP_MOUNT, 0755) < 0) {
+        kmsg("Failed to create directory %s", ENCRYPT_TMP_MOUNT);
+        return -1;
+    }
+    
+    snprintf(size_str, sizeof(size_str), "size=%lld", (long long)root_size + (100 * 1024 * 1024));
+    if (mount("tmpfs", ENCRYPT_TMP_MOUNT, "tmpfs", MS_NOEXEC | MS_NOSUID | MS_NODEV, size_str) < 0) {
+        kmsg("Failed to mount tmpfs with larger size: %s", strerror(errno));
+        return -1;
     }
 
     /* Step 1: Create a file in tmpfs to hold the encrypted data */
-    snprintf(tmp_file, sizeof(tmp_file), "%s/encrypted_root.img", TMP_MOUNT);
+    snprintf(tmp_file, sizeof(tmp_file), "%s/encrypted_root.img", ENCRYPT_TMP_MOUNT);
     kmsg("Creating temporary file: %s", tmp_file);
 
     fd = open(tmp_file, O_RDWR | O_CREAT, 0600);
@@ -663,7 +672,12 @@ static int encrypt_rootfs_in_place(void)
     /* Remove temporary file */
     unlink(tmp_file);
 
-    sync();
+    /* Unmount the separate tmpfs */
+    kmsg("Unmounting temporary encryption tmpfs...");
+    if (umount(ENCRYPT_TMP_MOUNT) < 0) {
+        kmsg("Warning: Failed to unmount %s: %s", ENCRYPT_TMP_MOUNT, strerror(errno));
+    }
+
     kmsg("Rootfs encryption complete");
     return 0;
 }
@@ -676,7 +690,8 @@ int main(int argc, char *argv[])
     char *veritysetup_argv[16];
     char *cryptsetup_argv[16];
     int arg_idx;
-    int first_boot;
+    int otp_key_exists;
+    int needs_encryption;
     unsigned char otp_key[32];
 
     kmsg("====== Starting %s version %s", PROGRAM_NAME, PROGRAM_VERSION);
@@ -701,30 +716,31 @@ int main(int argc, char *argv[])
         kmsg("Warning: /dev/vcio not available - OTP operations may fail");
     }
 
-    /* Check for first boot */
-    first_boot = is_first_boot();
-    if (first_boot < 0) {
-        die("Failed to check first boot condition");
+    /* Check if OTP key exists, generate if needed */
+    otp_key_exists = has_otp_key();
+    if (otp_key_exists < 0) {
+        die("Failed to check OTP key status");
     }
 
-    if (first_boot) {
-        kmsg("=== FIRST BOOT DETECTED ===");
-        kmsg("Performing initial setup...");
+    if (!otp_key_exists) {
+        kmsg("=== OTP KEY NOT INITIALIZED ===");
+        kmsg("Generating new OTP key...");
 
         /* Generate OTP key */
         if (generate_otp_key() < 0) {
             die("Failed to generate OTP key");
-        }
-
-        /* Mark boot as initialized */
-        if (mark_initialized() < 0) {
-            die("Failed to mark boot as initialized");
         }
     }
 
     /* Wait for root device to appear */
     if (wait_for_device(ROOT_DEVICE, 30) < 0) {
         die("Root device did not appear");
+    }
+
+    /* Check if rootfs needs encryption */
+    needs_encryption = is_rootfs_plaintext_squashfs();
+    if (needs_encryption < 0) {
+        die("Failed to check rootfs encryption status");
     }
 
     /* Create and mount boot partition */
@@ -781,18 +797,24 @@ int main(int argc, char *argv[])
         die("Failed to write key file");
     }
 
-    /* If first boot, encrypt the rootfs in place */
-    if (first_boot) {
+    /* If rootfs is plaintext, encrypt it in place */
+    if (needs_encryption) {
         kmsg("=== ENCRYPTING ROOTFS ===");
         if (encrypt_rootfs_in_place() < 0) {
             die("Failed to encrypt rootfs");
         }
+    } else {
+        kmsg("Rootfs is already encrypted, skipping encryption step");
     }
 
     /* Setup dm-verity */
-    kmsg("Setting up verity rootfs mapper...");
+    /* Setup dm-crypt first to decrypt the encrypted root device */
+    kmsg("Setting up dm-crypt to decrypt root device...");
+    setup_dm_crypt(ROOT_DEVICE, CRYPT_MAPPER_NAME, KEY_FILE);
+
+    kmsg("Setting up verity rootfs mapper on decrypted device...");
     kmsg("Mapper: %s", VERITY_MAPPER_PATH);
-    kmsg("Device: %s", ROOT_DEVICE);
+    kmsg("Device: %s", CRYPT_MAPPER_PATH);
     kmsg("Root hash: %s", root_hash);
     kmsg("Hash offset: %s", verity_offset);
 
@@ -803,9 +825,9 @@ int main(int argc, char *argv[])
     arg_idx = 0;
     veritysetup_argv[arg_idx++] = "veritysetup";
     veritysetup_argv[arg_idx++] = "open";
-    veritysetup_argv[arg_idx++] = ROOT_DEVICE;
+    veritysetup_argv[arg_idx++] = CRYPT_MAPPER_PATH;
     veritysetup_argv[arg_idx++] = VERITY_MAPPER_NAME;
-    veritysetup_argv[arg_idx++] = ROOT_DEVICE;
+    veritysetup_argv[arg_idx++] = CRYPT_MAPPER_PATH;
     veritysetup_argv[arg_idx++] = root_hash;
     veritysetup_argv[arg_idx++] = hash_offset_arg;
     veritysetup_argv[arg_idx] = NULL;
@@ -814,17 +836,13 @@ int main(int argc, char *argv[])
         die("Failed to setup dm-verity");
     }
 
-    /* Setup dm-crypt on top of dm-verity */
-    kmsg("Setting up dm-crypt on top of dm-verity...");
-    setup_dm_crypt(VERITY_MAPPER_PATH, CRYPT_MAPPER_NAME, KEY_FILE);
-
-    /* Mount the verified and decrypted root filesystem */
+    /* Mount the decrypted and verified root filesystem */
     kmsg("Mounting mapper as /media/root...");
     if (mkdir_p(ROOT_MOUNT, 0755) < 0) {
         die("Failed to create root mount point");
     }
 
-    if (mount_fs(CRYPT_MAPPER_PATH, ROOT_MOUNT, "squashfs", MS_RDONLY) < 0) {
+    if (mount_fs(VERITY_MAPPER_PATH, ROOT_MOUNT, "squashfs", MS_RDONLY) < 0) {
         die("Failed to mount verified root filesystem");
     }
 
