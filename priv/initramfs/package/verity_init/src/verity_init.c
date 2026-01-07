@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <dirent.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -61,6 +62,89 @@
 #define KEY_FILE "/tmp/keyfile.bin"
 #define FIRST_BOOT_CHECK_SIZE (256 * 512)  /* 256 LBA blocks */
 
+/* Forward declarations */
+static void kmsg(const char *fmt, ...);
+
+static int check_platform_driver_bound(const char *driver_path)
+{
+    DIR *dir;
+    struct dirent *entry;
+    int found_device = 0;
+
+    dir = opendir(driver_path);
+    if (!dir) {
+        return 0;  /* Driver not loaded */
+    }
+
+    /* Look for device symlinks (not . or .. or driver control files) */
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        if (strcmp(entry->d_name, "bind") == 0) continue;
+        if (strcmp(entry->d_name, "unbind") == 0) continue;
+        if (strcmp(entry->d_name, "uevent") == 0) continue;
+        if (strcmp(entry->d_name, "module") == 0) continue;
+
+        /* Found a device binding */
+        found_device = 1;
+        debug("Platform driver bound to device: %s", entry->d_name);
+        break;
+    }
+
+    closedir(dir);
+    return found_device;
+}
+
+static int wait_for_vcio_device(int timeout_seconds)
+{
+    struct stat st;
+    int elapsed = 0;
+    int driver_checked = 0;
+
+    kmsg("Waiting for /dev/vcio device...");
+
+    while (elapsed < timeout_seconds) {
+        /* Check if /dev/vcio exists and is a character device */
+        if (stat("/dev/vcio", &st) == 0 && S_ISCHR(st.st_mode)) {
+            kmsg("/dev/vcio is ready");
+            return 0;
+        }
+
+        /* On first iteration, check the platform driver status */
+        if (!driver_checked) {
+            driver_checked = 1;
+
+            if (access("/sys/bus/platform/drivers/vcio", F_OK) == 0) {
+                debug("vcio platform driver is registered");
+
+                if (check_platform_driver_bound("/sys/bus/platform/drivers/vcio")) {
+                    debug("vcio driver is bound to device, waiting for /dev node...");
+                } else {
+                    kmsg("Warning: vcio driver registered but not bound to any device");
+                    kmsg("Check device tree for mailbox/vcio node");
+                }
+            } else {
+                kmsg("Warning: vcio platform driver not found at /sys/bus/platform/drivers/vcio");
+                kmsg("The driver may not be compiled or device tree may be missing vcio node");
+            }
+
+            /* Check if the device class exists */
+            if (access("/sys/class/vcio", F_OK) == 0) {
+                debug("vcio device class exists");
+            }
+        }
+
+        sleep(1);
+        elapsed++;
+    }
+
+    kmsg("ERROR: Timeout waiting for /dev/vcio device after %d seconds", timeout_seconds);
+    kmsg("Troubleshooting:");
+    kmsg("  1. Check that vcio driver is enabled in device tree");
+    kmsg("  2. Check kernel config: CONFIG_BCM2835_MBOX=y or =m");
+    kmsg("  3. Check dmesg for driver initialization errors");
+    return -1;
+}
+
 static void kmsg(const char *fmt, ...)
 {
     va_list args;
@@ -93,6 +177,15 @@ static void kmsg(const char *fmt, ...)
 static void die(const char *msg)
 {
     kmsg("FATAL: %s: %s", msg, strerror(errno));
+    kmsg("Dropping to emergency shell for debugging...");
+    kmsg("Type 'exit' or press Ctrl+D to reboot");
+
+    /* Try to exec a shell */
+    char *shell_argv[] = {"/bin/sh", NULL};
+    execv("/bin/sh", shell_argv);
+
+    /* If exec fails, just exit */
+    kmsg("Failed to exec /bin/sh: %s", strerror(errno));
     exit(1);
 }
 
@@ -356,19 +449,28 @@ static int read_otp_key(unsigned char *key_out, size_t key_size)
 
     kmsg("Reading OTP key...");
 
-    fp = popen("/usr/bin/rpi-otp-key -b 2>/dev/null", "r");
+    fp = popen("/usr/bin/rpi-otp-key 2>&1", "r");
     if (!fp) {
         kmsg("Failed to execute rpi-otp-key: %s", strerror(errno));
         return -1;
     }
 
-    if (fread(key_out, 1, key_size, fp) != key_size) {
-        kmsg("Failed to read %zu bytes from rpi-otp-key", key_size);
-        pclose(fp);
+    size_t bytes_read = fread(key_out, 1, key_size, fp);
+    int status = pclose(fp);
+
+    if (bytes_read != key_size) {
+        kmsg("Failed to read %zu bytes from rpi-otp-key (got %zu bytes)", key_size, bytes_read);
+        if (status != 0) {
+            kmsg("rpi-otp-key exited with status: %d", WEXITSTATUS(status));
+        }
+        kmsg("Check if /dev/vcio exists and vcmailbox is available");
         return -1;
     }
 
-    pclose(fp);
+    if (status != 0) {
+        kmsg("rpi-otp-key completed but exited with status: %d", WEXITSTATUS(status));
+        return -1;
+    }
 
     debug("OTP key read successfully");
     return 0;
@@ -594,6 +696,11 @@ int main(int argc, char *argv[])
         die("Failed to mount /sys");
     }
 
+    /* Wait for /dev/vcio device (needed by vcmailbox for OTP access) */
+    if (wait_for_vcio_device(10) < 0) {
+        kmsg("Warning: /dev/vcio not available - OTP operations may fail");
+    }
+
     /* Check for first boot */
     first_boot = is_first_boot();
     if (first_boot < 0) {
@@ -717,7 +824,7 @@ int main(int argc, char *argv[])
         die("Failed to create root mount point");
     }
 
-    if (mount_fs(CRYPT_MAPPER_PATH, ROOT_MOUNT, "ext4", MS_RDONLY) < 0) {
+    if (mount_fs(CRYPT_MAPPER_PATH, ROOT_MOUNT, "squashfs", MS_RDONLY) < 0) {
         die("Failed to mount verified root filesystem");
     }
 
