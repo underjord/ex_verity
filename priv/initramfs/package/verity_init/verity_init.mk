@@ -21,7 +21,7 @@ define VERITY_INIT_BUILD_CMDS
 endef
 
 define VERITY_INIT_INSTALL_TARGET_CMDS
-	$(INSTALL) -D -m 755 $(@D)/verity-init $(TARGET_DIR)/sbin/init
+	$(INSTALL) -D -m 755 $(@D)/verity-init $(TARGET_DIR)/init
 endef
 
 $(eval $(generic-package))
