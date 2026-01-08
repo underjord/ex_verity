@@ -63,6 +63,7 @@
 #define NEXT_INIT "/sbin/init_sh"
 #define KEY_FILE "/tmp/keyfile.bin"
 #define SQUASHFS_MAGIC 0x73717368  /* "hsqs" in little-endian */
+#define KEY_SIZE 32
 
 /* Forward declarations */
 static void kmsg(const char *fmt, ...);
@@ -323,13 +324,13 @@ static int read_file_trim(const char *path, char *buf, size_t buf_size)
 
 static int has_otp_key(void)
 {
-    unsigned char key[32];
+    unsigned char key[KEY_SIZE+1];
     size_t i;
     int all_zeros = 1;
 
     kmsg("Checking if OTP key exists...");
 
-    if (read_otp_key(key, sizeof(key)) < 0) {
+    if (read_otp_key(key, KEY_SIZE) < 0) {
         kmsg("Failed to read OTP key - assuming it doesn't exist");
         return 0;
     }
@@ -443,7 +444,7 @@ static int read_otp_key(unsigned char *key_out, size_t key_size)
 
     kmsg("Reading OTP key...");
 
-    fp = popen("/usr/bin/rpi-otp-key 2>&1", "r");
+    fp = popen("/usr/bin/rpi-otp-key -b 2>&1", "r");
     if (!fp) {
         kmsg("Failed to execute rpi-otp-key: %s", strerror(errno));
         return -1;
@@ -575,7 +576,7 @@ static int encrypt_rootfs_in_place(void)
         kmsg("Failed to create directory %s", ENCRYPT_TMP_MOUNT);
         return -1;
     }
-    
+
     snprintf(size_str, sizeof(size_str), "size=%lld", (long long)root_size + (100 * 1024 * 1024));
     if (mount("tmpfs", ENCRYPT_TMP_MOUNT, "tmpfs", MS_NOEXEC | MS_NOSUID | MS_NODEV, size_str) < 0) {
         kmsg("Failed to mount tmpfs with larger size: %s", strerror(errno));
@@ -692,7 +693,7 @@ int main(int argc, char *argv[])
     int arg_idx;
     int otp_key_exists;
     int needs_encryption;
-    unsigned char otp_key[32];
+    unsigned char otp_key[KEY_SIZE+1];
 
     kmsg("====== Starting %s version %s", PROGRAM_NAME, PROGRAM_VERSION);
 
@@ -779,7 +780,7 @@ int main(int argc, char *argv[])
     }
 
     /* Read OTP key */
-    if (read_otp_key(otp_key, sizeof(otp_key)) < 0) {
+    if (read_otp_key(otp_key, KEY_SIZE) < 0) {
         die("Failed to read OTP key");
     }
 
@@ -825,6 +826,7 @@ int main(int argc, char *argv[])
     arg_idx = 0;
     veritysetup_argv[arg_idx++] = "veritysetup";
     veritysetup_argv[arg_idx++] = "open";
+    veritysetup_argv[arg_idx++] = "-v";
     veritysetup_argv[arg_idx++] = CRYPT_MAPPER_PATH;
     veritysetup_argv[arg_idx++] = VERITY_MAPPER_NAME;
     veritysetup_argv[arg_idx++] = CRYPT_MAPPER_PATH;

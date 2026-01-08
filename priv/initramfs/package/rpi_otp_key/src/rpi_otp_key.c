@@ -446,11 +446,6 @@ int main(int argc, char *argv[])
         die("Offset too big");
     }
 
-    /* Check for binary output dependency */
-    if (opts.output_binary && system("which xxd >/dev/null 2>&1") != 0) {
-        die("xxd command required for binary output");
-    }
-
     /* Execute requested operation */
     if (opts.write_key) {
         /* Write key operation */
