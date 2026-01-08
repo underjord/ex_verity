@@ -336,7 +336,7 @@ static int has_otp_key(void)
     }
 
     /* Check if all bytes are zero (uninitialized OTP) */
-    for (i = 0; i < sizeof(key); i++) {
+    for (i = 0; i < KEY_SIZE; i++) {
         if (key[i] != 0) {
             all_zeros = 0;
             break;
@@ -394,11 +394,11 @@ static int is_rootfs_plaintext_squashfs(void)
 
 static int generate_otp_key(void)
 {
-    char *argv[4];
+    char *argv[5];
     char key_hex[256];
     FILE *fp;
     int i;
-    unsigned char key_bytes[32];
+    unsigned char key_bytes[KEY_SIZE];
 
     kmsg("Generating new OTP key...");
 
@@ -417,18 +417,19 @@ static int generate_otp_key(void)
     fclose(fp);
 
     /* Convert to hex string */
-    for (i = 0; i < 32; i++) {
+    for (i = 0; i < KEY_SIZE; i++) {
         snprintf(key_hex + (i * 2), 3, "%02x", key_bytes[i]);
     }
     key_hex[64] = '\0';
 
-    kmsg("Generated key: %.16s...", key_hex);
+    kmsg("Generated key: %.64s...", key_hex);
 
     /* Write key to OTP using rpi-otp-key */
     argv[0] = "rpi-otp-key";
-    argv[1] = "-wy";
-    argv[2] = key_hex;
-    argv[3] = NULL;
+    argv[1] = "-y";
+    argv[2] = "-w";
+    argv[3] = key_hex;
+    argv[4] = NULL;
 
     if (run_command("/usr/bin/rpi-otp-key", argv) < 0) {
         die("Failed to write OTP key");
@@ -723,7 +724,7 @@ int main(int argc, char *argv[])
         die("Failed to check OTP key status");
     }
 
-    if (!otp_key_exists) {
+    if (otp_key_exists == 0) {
         kmsg("=== OTP KEY NOT INITIALIZED ===");
         kmsg("Generating new OTP key...");
 
