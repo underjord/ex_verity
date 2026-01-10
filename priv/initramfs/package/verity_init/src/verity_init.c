@@ -422,7 +422,7 @@ static int generate_otp_key(void)
     }
     key_hex[64] = '\0';
 
-    kmsg("Generated key: %.64s...", key_hex);
+    kmsg("Generated key: %.16s...", key_hex);
 
     /* Write key to OTP using rpi-otp-key */
     argv[0] = "rpi-otp-key";
